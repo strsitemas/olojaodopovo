@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       if (pagarmeOrderId) {
         await db.order.updateMany({
           where: { pagarmeOrderId },
-          data: { status: "PAYMENT_FAILED" },
+          data: { status: "CANCELLED" },
         })
         console.log("[webhook] Pedido marcado como PAYMENT_FAILED:", pagarmeOrderId)
       }
