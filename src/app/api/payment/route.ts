@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     for (const item of order.orderItems) {
       const rid = item.store.owner.pagarmeRecipientId
       if (!rid) continue
-      splitMap[rid] = (splitMap[rid] ?? 0) + Math.round(item.unitPrice * item.quantity * 100)
+      splitMap[rid] = (splitMap[rid] ?? 0) + Math.round(Number(item.unitPrice) * Number(item.quantity) * 100)
     }
     const split = Object.entries(splitMap).map(([recipient_id, amount]) => ({
       recipient_id,
