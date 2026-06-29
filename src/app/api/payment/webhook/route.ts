@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       if (pagarmeOrderId) {
         await db.order.updateMany({
           where: { pagarmeOrderId },
-          data: { status: "PAID", paidAt: new Date() },
+          data: { status: "PAID" },
         })
         console.log("[webhook] Pedido marcado como PAID:", pagarmeOrderId)
       }
