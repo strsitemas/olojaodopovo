@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       },
     }))
 
-    const totalCents = Math.round(order.totalAmount * 100)
+    const totalCents = Math.round(Number(order.totalAmount) * 100)
 
     const pagarmeBody: any = {
       customer: {
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         type: "individual",
       },
       items: order.orderItems.map((item) => ({
-        amount: Math.round(item.unitPrice * 100),
+        amount: Math.round(Number(item.unitPrice) * 100),
         description: item.product.title,
         quantity: item.quantity,
         code: item.product.id,

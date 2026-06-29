@@ -42,3 +42,4 @@ next-env.d.ts
 
 # contexto de sessao
 contexto*.txt
+.vercel
