@@ -1,8 +1,9 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import ImageUploader from "@/components/image-uploader"
 
 const CATEGORIES = [
   "Roupas",
@@ -21,13 +22,13 @@ export default function NovoProdutoPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [images, setImages] = useState<string[]>([])
   const [form, setForm] = useState({
     title: "",
     description: "",
     price: "",
     stock: "",
     category: "",
-    imageUrl: "",
   })
 
   function handleChange(
@@ -39,6 +40,12 @@ export default function NovoProdutoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
+
+    if (images.length === 0) {
+      setError("Adicione pelo menos uma foto do produto.")
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -51,7 +58,8 @@ export default function NovoProdutoPage() {
           price: parseFloat(form.price),
           stock: form.stock !== "" ? parseInt(form.stock) : 0,
           category: form.category || undefined,
-          imageUrl: form.imageUrl || undefined,
+          images,
+          imageUrl: images[0],
         }),
       })
 
@@ -89,6 +97,8 @@ export default function NovoProdutoPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <ImageUploader images={images} onChange={setImages} />
+
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">
             Titulo do produto *
@@ -169,23 +179,6 @@ export default function NovoProdutoPage() {
               </option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            URL da imagem
-          </label>
-          <input
-            type="url"
-            name="imageUrl"
-            value={form.imageUrl}
-            onChange={handleChange}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-            placeholder="https://..."
-          />
-          <p className="mt-1 text-xs text-gray-400">
-            Por enquanto cole uma URL externa. Upload proprio vem depois.
-          </p>
         </div>
 
         <button

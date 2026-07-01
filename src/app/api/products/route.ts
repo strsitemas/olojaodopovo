@@ -7,16 +7,14 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
-
     const role = (session.user as any).role
     if (role !== "SELLER" && role !== "ADMIN") return NextResponse.json({ error: "Sem permissao." }, { status: 403 })
-
     const userId = (session.user as any).id
     const store = await db.store.findFirst({ where: { ownerId: userId } })
     if (!store) return NextResponse.json({ error: "Crie uma loja antes de cadastrar produtos." }, { status: 400 })
 
     const body = await req.json()
-    const { title, description, price, stock, category, imageUrl } = body
+    const { title, description, price, stock, category, imageUrl, images } = body
 
     if (!title || price === undefined || price === null)
       return NextResponse.json({ error: "Titulo e preco sao obrigatorios." }, { status: 400 })
@@ -27,6 +25,10 @@ export async function POST(req: Request) {
 
     const parsedStock = stock !== undefined ? Number(stock) : 0
 
+    const imagesArray: string[] = Array.isArray(images) ? images.filter(Boolean).slice(0, 6) : []
+
+    console.log("[POST /api/products] Imagens recebidas:", imagesArray.length)
+
     const product = await db.product.create({
       data: {
         title,
@@ -34,7 +36,8 @@ export async function POST(req: Request) {
         price: parsedPrice,
         stock: parsedStock,
         category,
-        imageUrl,
+        imageUrl: imageUrl || imagesArray[0] || null,
+        images: imagesArray,
         storeId: store.id,
         status: parsedStock > 0 ? "ACTIVE" : "OUT_OF_STOCK",
       },
@@ -51,11 +54,9 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
-
     const userId = (session.user as any).id
     const store = await db.store.findFirst({ where: { ownerId: userId } })
     if (!store) return NextResponse.json({ products: [] })
-
     const products = await db.product.findMany({
       where: { storeId: store.id },
       orderBy: { createdAt: "desc" },
@@ -67,10 +68,10 @@ export async function GET() {
         status: true,
         category: true,
         imageUrl: true,
+        images: true,
         createdAt: true,
       },
     })
-
     return NextResponse.json({ products })
   } catch (error) {
     console.error("[GET /api/products]", error)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 
@@ -8,6 +8,8 @@ const CATEGORIES = [
   "Roupas", "Calcados", "Eletronicos", "Casa e Decoracao",
   "Alimentos", "Brinquedos", "Esportes", "Beleza", "Ferramentas", "Outros",
 ]
+
+const MAX_IMAGES = 6
 
 export default function EditarProdutoPage() {
   const router = useRouter()
@@ -20,6 +22,8 @@ export default function EditarProdutoPage() {
   const [error, setError] = useState("")
   const [novaUrl, setNovaUrl] = useState("")
   const [urlError, setUrlError] = useState("")
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [form, setForm] = useState({
     title: "",
@@ -71,29 +75,54 @@ export default function EditarProdutoPage() {
     setUrlError("")
     const url = novaUrl.trim()
     if (!url) return
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      setUrlError("URL invalida. Precisa comecar com http:// ou https://")
+    try { new URL(url) } catch {
+      setUrlError("URL invalida.")
       return
     }
     if (form.images.includes(url)) {
       setUrlError("Essa imagem ja foi adicionada.")
       return
     }
-    if (form.images.length >= 8) {
-      setUrlError("Limite de 8 imagens por produto.")
+    if (form.images.length >= MAX_IMAGES) {
+      setUrlError("Limite de " + MAX_IMAGES + " imagens por produto.")
       return
     }
-    console.log("[EditarProduto] Adicionando imagem:", url)
+    console.log("[EditarProduto] Adicionando imagem por URL:", url)
     setForm((prev) => ({ ...prev, images: [...prev.images, url] }))
     setNovaUrl("")
   }
 
+  async function handleFileUpload(file: File) {
+    if (form.images.length >= MAX_IMAGES) {
+      setUrlError("Limite de " + MAX_IMAGES + " imagens por produto.")
+      return
+    }
+    setUrlError("")
+    setUploadingIndex(form.images.length)
+    console.log("[EditarProduto] Iniciando upload:", file.name)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) {
+        console.error("[EditarProduto] Erro no upload:", data.error)
+        setUrlError(data.error ?? "Erro ao fazer upload.")
+        return
+      }
+      console.log("[EditarProduto] Upload concluido:", data.url)
+      setForm((prev) => ({ ...prev, images: [...prev.images, data.url] }))
+    } catch (err) {
+      console.error("[EditarProduto] Falha no upload:", err)
+      setUrlError("Erro de conexao ao enviar imagem.")
+    } finally {
+      setUploadingIndex(null)
+    }
+  }
+
   function removerImagem(index: number) {
     console.log("[EditarProduto] Removendo imagem index:", index)
-    setForm((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }))
+    setForm((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }))
   }
 
   function moverImagem(index: number, direcao: -1 | 1) {
@@ -107,6 +136,10 @@ export default function EditarProdutoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
+    if (form.images.length === 0) {
+      setError("Adicione pelo menos uma foto do produto.")
+      return
+    }
     setSaving(true)
     console.log("[EditarProduto] Salvando produto:", id, "imagens:", form.images.length)
     try {
@@ -206,64 +239,71 @@ export default function EditarProdutoPage() {
           <select name="category" value={form.category} onChange={handleChange}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none">
             <option value="">Selecione...</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-700">
-            Fotos do produto
-            <span className="ml-1 font-normal text-gray-400">({form.images.length}/8) — primeira e a capa</span>
+            Fotos do produto{" "}
+            <span className="font-normal text-gray-400">({form.images.length}/{MAX_IMAGES}) - primeira e a capa</span>
           </label>
 
           {form.images.length > 0 && (
-            <div className="mb-3 grid grid-cols-4 gap-2">
+            <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
               {form.images.map((img, i) => (
                 <div key={i} className="relative">
-                  <img
-                    src={img}
-                    alt=""
-                    className={"h-20 w-full rounded-md object-cover border-2 " +
-                      (i === 0 ? "border-gray-900" : "border-gray-200")}
-                    onError={(e) => {
-                      console.warn("[EditarProduto] Imagem falhou ao carregar:", img)
-                      ;(e.target as HTMLImageElement).src = ""
-                    }}
+                  <img src={img} alt=""
+                    className={"h-20 w-full rounded-md object-cover border-2 " + (i === 0 ? "border-gray-900" : "border-gray-200")}
+                    onError={(e) => { console.warn("[EditarProduto] Imagem falhou:", img); (e.target as HTMLImageElement).style.opacity = "0.3" }}
                   />
                   {i === 0 && (
-                    <span className="absolute left-1 top-1 rounded bg-gray-900 px-1 text-xs text-white">capa</span>
+                    <span className="absolute left-1 top-1 rounded bg-gray-900 px-1 text-[10px] text-white">capa</span>
                   )}
                   <div className="mt-1 flex justify-between gap-1">
                     <button type="button" onClick={() => moverImagem(i, -1)} disabled={i === 0}
-                      className="flex-1 rounded border text-xs py-0.5 disabled:opacity-30 hover:bg-gray-50">←</button>
+                      className="flex-1 rounded border text-xs py-0.5 disabled:opacity-30 hover:bg-gray-50">&larr;</button>
                     <button type="button" onClick={() => moverImagem(i, 1)} disabled={i === form.images.length - 1}
-                      className="flex-1 rounded border text-xs py-0.5 disabled:opacity-30 hover:bg-gray-50">→</button>
+                      className="flex-1 rounded border text-xs py-0.5 disabled:opacity-30 hover:bg-gray-50">&rarr;</button>
                     <button type="button" onClick={() => removerImagem(i)}
-                      className="flex-1 rounded border border-red-200 text-xs py-0.5 text-red-500 hover:bg-red-50">✕</button>
+                      className="flex-1 rounded border border-red-200 text-xs py-0.5 text-red-500 hover:bg-red-50">&times;</button>
                   </div>
                 </div>
               ))}
+              {uploadingIndex !== null && (
+                <div className="flex h-20 items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">
+                  <span className="text-[10px] text-gray-400">Enviando...</span>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={novaUrl}
-              onChange={(e) => setNovaUrl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarImagem() } }}
-              placeholder="https://... cole a URL da imagem"
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-            />
-            <button type="button" onClick={adicionarImagem}
-              className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-600">
-              Adicionar
-            </button>
-          </div>
-          {urlError && <p className="mt-1 text-xs text-red-500">{urlError}</p>}
-          <p className="mt-1 text-xs text-gray-400">Cole a URL e pressione Enter ou clique Adicionar. Use setas para reordenar.</p>
+          {form.images.length < MAX_IMAGES && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileInputRef}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = "" }}
+                  className="hidden" />
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingIndex !== null}
+                  className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-600 disabled:opacity-50">
+                  {uploadingIndex !== null ? "Enviando..." : "Enviar foto"}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input type="text" value={novaUrl}
+                  onChange={(e) => setNovaUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarImagem() } }}
+                  placeholder="ou cole um link: https://..."
+                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none" />
+                <button type="button" onClick={adicionarImagem}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  Adicionar
+                </button>
+              </div>
+              {urlError && <p className="text-xs text-red-500">{urlError}</p>}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">
